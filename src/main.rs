@@ -12,12 +12,6 @@ fn main() {
     log::debug!("Parsed configuration: {:?}", config);
 
     match config.command {
-        CommandType::Tutorial(tutorial_config) => {
-            if let Err(e) = book_pictures::run_tutorial(tutorial_config) {
-                eprintln!("Application error: {e}");
-                process::exit(1);
-            }
-        }
         CommandType::ToBlackAndWhite(to_black_and_whit_config) => {
             if let Err(e) = book_pictures::run_to_black_and_white(to_black_and_whit_config) {
                 eprintln!("Application error: {e}");
@@ -32,8 +26,7 @@ fn main() {
         }
         CommandType::ProcessText(process_text_config) => {
             handle_process_text_subcommand(process_text_config)
-        }
-        // _ => println!("unknown command")
+        } // _ => println!("unknown command")
     }
 }
 
@@ -41,6 +34,18 @@ fn handle_process_text_subcommand(config: ProcessTextConfig) {
     match config.text_command {
         TextCommandType::TextLength(text_length_config) => {
             if let Err(e) = book_pictures::run_text_length(text_length_config) {
+                eprintln!("Application error: {e}");
+                process::exit(1);
+            }
+        }
+        TextCommandType::ReplaceEnters(replace_enters_config) => {
+            if let Err(e) = book_pictures::run_replace_enters(replace_enters_config) {
+                eprintln!("Application error: {e}");
+                process::exit(1);
+            }
+        }
+        TextCommandType::StripWhitespaces(strip_whitespaces_config) => {
+            if let Err(e) = book_pictures::run_strip_whitespaces(strip_whitespaces_config) {
                 eprintln!("Application error: {e}");
                 process::exit(1);
             }

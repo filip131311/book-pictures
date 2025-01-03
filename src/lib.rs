@@ -1,12 +1,15 @@
 pub mod cli;
 
-use cli::{GenerateGridConfig, TextLengthConfig, ToBlackAndWhiteConfig, TutorialConfig};
+use cli::{
+    GenerateGridConfig, ReplaceEntersConfig, StripWhitespacesConfig, TextLengthConfig,
+    ToBlackAndWhiteConfig,
+};
 use image::{GenericImageView, ImageBuffer, ImageReader, Rgb, Rgba};
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 use std::error::Error;
-use std::fs::{self, File};
-use std::io::{BufReader, Read};
+use std::fs::File;
+use std::io::{BufReader, BufWriter, Read, Write};
 
 pub fn run_to_black_and_white(config: ToBlackAndWhiteConfig) -> Result<(), Box<dyn Error>> {
     let source_path = &config.source_path;
@@ -126,71 +129,76 @@ pub fn run_text_length(config: TextLengthConfig) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-pub fn run_tutorial(config: TutorialConfig) -> Result<(), Box<dyn Error>> {
-    let contents = fs::read_to_string(config.file_path)?;
+pub fn run_strip_whitespaces(config: StripWhitespacesConfig) -> Result<(), Box<dyn Error>> {
+    let source_path = config.source_path;
+    let target_path = config
+        .target_path
+        .unwrap_or(String::from("text_without_whitespaces.txt"));
 
-    let results = if config.ignore_case {
-        search_case_insensitive(&config.query, &contents)
-    } else {
-        search(&config.query, &contents)
-    };
+    let source_file = File::open(source_path)?;
+    let mut reader = BufReader::new(source_file);
 
-    for line in results {
-        println!("{line}");
+    let target_file = File::create(target_path)?;
+    let mut writer = BufWriter::new(target_file);
+
+    let mut buffer = [0; 1024];
+
+    while let Ok(bytes_read) = reader.read(&mut buffer) {
+        if bytes_read == 0 {
+            break;
+        }
+
+        let result: String = buffer[..bytes_read]
+            .iter()
+            .filter_map(|&b| {
+                let c = b as char;
+                if !c.is_whitespace() {
+                    Some(c)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        writer.write_all(result.as_bytes())?;
     }
 
+    writer.flush()?;
     Ok(())
 }
 
-pub fn search<'a>(query: &str, contents: &'a str) -> Vec<&'a str> {
-    contents
-        .lines()
-        .filter(|line| line.contains(query))
-        .collect()
-}
+pub fn run_replace_enters(config: ReplaceEntersConfig) -> Result<(), Box<dyn Error>> {
+    let source_path = config.source_path;
+    let target_path = config
+        .target_path
+        .unwrap_or(String::from("text_without_whitespaces.txt"));
 
-pub fn search_case_insensitive<'a>(query: &str, contents: &'a str) -> Vec<&'a str> {
-    let query = query.to_lowercase();
-    let mut results = Vec::new();
+    let source_file = File::open(source_path)?;
+    let mut reader = BufReader::new(source_file);
 
-    for line in contents.lines() {
-        if line.to_lowercase().contains(&query) {
-            results.push(line);
+    let target_file = File::create(target_path)?;
+    let mut writer = BufWriter::new(target_file);
+
+    let mut buffer = [0; 1024];
+
+    while let Ok(bytes_read) = reader.read(&mut buffer) {
+        if bytes_read == 0 {
+            break;
         }
+
+        let result: String = buffer[..bytes_read]
+            .iter()
+            .map(|&b| {
+                let c = b as char;
+                if c != '\n' && c != '\r' {
+                    c
+                } else {
+                    ' '
+                }
+            })
+            .collect();
+        writer.write_all(result.as_bytes())?;
     }
 
-    results
-}
-
-#[cfg(test)]
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn case_sensitive() {
-        let query = "duct";
-        let contents = "\
-Rust:
-safe, fast, productive.
-Pick three.
-Duct tape.";
-
-        assert_eq!(vec!["safe, fast, productive."], search(query, contents));
-    }
-
-    #[test]
-    fn case_insensitive() {
-        let query = "rUsT";
-        let contents = "\
-Rust:
-safe, fast, productive.
-Pick three.
-Trust me.";
-
-        assert_eq!(
-            vec!["Rust:", "Trust me."],
-            search_case_insensitive(query, contents)
-        );
-    }
+    writer.flush()?;
+    Ok(())
 }

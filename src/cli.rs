@@ -14,7 +14,6 @@ pub enum CommandType {
     ToBlackAndWhite(ToBlackAndWhiteConfig),
     GenerateGrid(GenerateGridConfig),
     ProcessText(ProcessTextConfig),
-    Tutorial(TutorialConfig),
 }
 
 #[derive(FromArgs, PartialEq, Debug)]
@@ -54,6 +53,8 @@ pub struct ProcessTextConfig {
 #[argh(subcommand)]
 pub enum TextCommandType {
     TextLength(TextLengthConfig),
+    ReplaceEnters(ReplaceEntersConfig),
+    StripWhitespaces(StripWhitespacesConfig),
 }
 
 #[derive(FromArgs, PartialEq, Debug)]
@@ -66,18 +67,25 @@ pub struct TextLengthConfig {
 }
 
 #[derive(FromArgs, PartialEq, Debug)]
-/// This is a subcommand form the tutorial https://doc.rust-lang.org/book/ch12-00-an-io-project.html
-#[argh(subcommand, name = "tutorial")]
-pub struct TutorialConfig {
-    /// the searched string
+/// Generate a grid picture mage of grey and white pixels based on an image.
+#[argh(subcommand, name = "replace-enters")]
+pub struct ReplaceEntersConfig {
+    /// the path to the source text
     #[argh(positional)]
-    pub query: String,
+    pub source_path: String,
+    #[argh(option)]
+    /// the (optional) path for the new text file
+    pub target_path: Option<String>,
+}
 
-    /// the target file
+#[derive(FromArgs, PartialEq, Debug)]
+/// Generate a grid picture mage of grey and white pixels based on an image.
+#[argh(subcommand, name = "strip-whitespaces")]
+pub struct StripWhitespacesConfig {
+    /// the path to the source text
     #[argh(positional)]
-    pub file_path: String,
-
-    /// should ignore case?
-    #[argh(switch)]
-    pub ignore_case: bool,
+    pub source_path: String,
+    #[argh(option)]
+    /// the (optional) path for the new text file
+    pub target_path: Option<String>,
 }
