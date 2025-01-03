@@ -1,15 +1,16 @@
 pub mod cli;
 
 use cli::{
-    GenerateGridConfig, ReplaceEntersConfig, StripWhitespacesConfig, TextLengthConfig,
-    ToBlackAndWhiteConfig,
+    GenerateGridConfig, RemoveMatchingLinesConfig, ReplaceEntersConfig, StripWhitespacesConfig,
+    TextLengthConfig, ToBlackAndWhiteConfig,
 };
 use image::{GenericImageView, ImageBuffer, ImageReader, Rgb, Rgba};
 use rand::seq::SliceRandom;
 use rand::thread_rng;
+use regex::Regex;
 use std::error::Error;
 use std::fs::File;
-use std::io::{BufReader, BufWriter, Read, Write};
+use std::io::{BufRead, BufReader, BufWriter, Read, Write};
 
 pub fn run_to_black_and_white(config: ToBlackAndWhiteConfig) -> Result<(), Box<dyn Error>> {
     let source_path = &config.source_path;
@@ -43,17 +44,22 @@ pub fn run_generate_grid(config: GenerateGridConfig) -> Result<(), Box<dyn Error
     let height = black_and_white_img.height();
     let width = black_and_white_img.width();
 
-    let mut grid_layout = Vec::<(bool, u32, u32)>::new();
+    let mut imgbuf: ImageBuffer<Rgb<u8>, Vec<u8>> =
+        ImageBuffer::from_pixel(width * 3, height * 3, Rgb([255, 255, 255]));
+
+    let mut pixel_count = 0;
 
     black_and_white_img
         .pixels()
         .for_each(|pixel: (u32, u32, Rgba<u8>)| {
             let pixels_density = map_value_by_distribution(
                 (255 - pixel.2[0]) as usize * pixel.2[3] as usize,
-                |x| x.sqrt(),
+                |x| x,
                 255 * 255,
                 9,
             );
+
+            pixel_count += pixels_density;
 
             let mut rng = thread_rng();
 
@@ -61,33 +67,22 @@ pub fn run_generate_grid(config: GenerateGridConfig) -> Result<(), Box<dyn Error
 
             array.shuffle(&mut rng);
 
-            let f_array = array
-                .iter()
-                .enumerate()
-                .map(|(index, &has_pixel)| {
-                    (
-                        has_pixel,
-                        pixel.0 * 3 + index as u32 / 3,
-                        pixel.1 * 3 + index as u32 % 3,
-                    )
-                })
-                .collect::<Vec<_>>();
-
-            grid_layout.extend(f_array);
+            array.iter().enumerate().for_each(|(index, &has_pixel)| {
+                if !has_pixel {
+                    return;
+                }
+                let p = Rgb([0u8, 0u8, 0u8]);
+                imgbuf.put_pixel(
+                    pixel.0 * 3 + index as u32 / 3,
+                    pixel.1 * 3 + index as u32 % 3,
+                    p,
+                );
+            });
         });
 
-    let mut imgbuf: ImageBuffer<Rgb<u8>, Vec<u8>> =
-        ImageBuffer::from_pixel(width * 3, height * 3, Rgb([255, 255, 255]));
-
-    grid_layout.iter().for_each(|(has_pixel, x, y)| {
-        if !has_pixel {
-            return;
-        }
-
-        let pixel = Rgb([0u8, 0u8, 0u8]);
-        imgbuf.put_pixel(*x, *y, pixel);
-    });
     imgbuf.save(target_path).unwrap();
+
+    println!("The picture requires {} letters.", pixel_count);
 
     Ok(())
 }
@@ -200,5 +195,27 @@ pub fn run_replace_enters(config: ReplaceEntersConfig) -> Result<(), Box<dyn Err
     }
 
     writer.flush()?;
+    Ok(())
+}
+
+pub fn run_remove_matching_lines(config: RemoveMatchingLinesConfig) -> Result<(), Box<dyn Error>> {
+    let source_path = config.source_path;
+    let target_path = config
+        .target_path
+        .unwrap_or(String::from("text_with_lines_removed.txt"));
+    let pattern = Regex::new(&config.regex)?;
+
+    let file = File::open(source_path)?;
+    let reader = BufReader::new(file);
+
+    let mut output = File::create(&target_path)?;
+
+    reader.lines().for_each(|line| {
+        let line = line.unwrap();
+        if !pattern.is_match(&line) {
+            writeln!(output, "{}", line).unwrap();
+        }
+    });
+
     Ok(())
 }

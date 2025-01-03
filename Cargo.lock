@@ -190,6 +190,7 @@ dependencies = [
  "log",
  "num-complex",
  "rand",
+ "regex",
 ]
 
 [[package]]

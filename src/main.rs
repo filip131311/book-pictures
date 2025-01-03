@@ -50,6 +50,12 @@ fn handle_process_text_subcommand(config: ProcessTextConfig) {
                 process::exit(1);
             }
         }
+        TextCommandType::RemoveMatchingLines(remove_matching_lines_config) => {
+            if let Err(e) = book_pictures::run_remove_matching_lines(remove_matching_lines_config) {
+                eprintln!("Application error: {e}");
+                process::exit(1);
+            }
+        }
     }
     ()
 }
