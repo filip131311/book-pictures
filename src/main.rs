@@ -1,6 +1,6 @@
 use std::process;
 
-use book_pictures::cli::{CommandType, Config};
+use book_pictures::cli::{CommandType, Config, ProcessTextConfig, TextCommandType};
 
 fn main() {
     env_logger::init();
@@ -30,5 +30,21 @@ fn main() {
                 process::exit(1);
             }
         }
+        CommandType::ProcessText(process_text_config) => {
+            handle_process_text_subcommand(process_text_config)
+        }
+        // _ => println!("unknown command")
     }
+}
+
+fn handle_process_text_subcommand(config: ProcessTextConfig) {
+    match config.text_command {
+        TextCommandType::TextLength(text_length_config) => {
+            if let Err(e) = book_pictures::run_text_length(text_length_config) {
+                eprintln!("Application error: {e}");
+                process::exit(1);
+            }
+        }
+    }
+    ()
 }

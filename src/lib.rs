@@ -1,11 +1,12 @@
 pub mod cli;
 
-use cli::{GenerateGridConfig, ToBlackAndWhiteConfig, TutorialConfig};
+use cli::{GenerateGridConfig, TextLengthConfig, ToBlackAndWhiteConfig, TutorialConfig};
 use image::{GenericImageView, ImageBuffer, ImageReader, Rgb, Rgba};
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 use std::error::Error;
-use std::fs;
+use std::fs::{self, File};
+use std::io::{BufReader, Read};
 
 pub fn run_to_black_and_white(config: ToBlackAndWhiteConfig) -> Result<(), Box<dyn Error>> {
     let source_path = &config.source_path;
@@ -15,10 +16,15 @@ pub fn run_to_black_and_white(config: ToBlackAndWhiteConfig) -> Result<(), Box<d
 
     let img = ImageReader::open(source_path)?.decode()?;
 
-    // let black_and_white_img = img.grayscale();
+    log::debug!("Read image from:{source_path}");
+
     let black_and_white_img = img.grayscale();
-    // black_and_white_img.invert();
+
+    log::debug!("Turned image to grayscale");
+
     black_and_white_img.save(target_path)?;
+
+    log::debug!("Saved image to:{target_path}");
 
     Ok(())
 }
@@ -96,6 +102,28 @@ where
     let distributed = distribution(normalized_value);
     let scaled_value = (distributed * max_final_value as f32).round() as usize;
     scaled_value.min(max_final_value)
+}
+
+pub fn run_text_length(config: TextLengthConfig) -> Result<(), Box<dyn Error>> {
+    let file = File::open(config.source_path)?;
+    let mut buf_reader = BufReader::new(file);
+
+    let mut contents = String::new();
+    let mut total_chars = 0;
+
+    // Read chunks of 1024 bytes
+    let mut buffer = [0; 1024];
+    while let Ok(bytes_read) = buf_reader.read(&mut buffer) {
+        if bytes_read == 0 {
+            break; // End of file
+        }
+        contents.push_str(&String::from_utf8_lossy(&buffer[..bytes_read]));
+        total_chars += contents.chars().count();
+        contents.clear(); // Clear contents to read next chunk
+    }
+
+    println!("The total number of characters: {}", total_chars);
+    Ok(())
 }
 
 pub fn run_tutorial(config: TutorialConfig) -> Result<(), Box<dyn Error>> {
