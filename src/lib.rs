@@ -39,8 +39,12 @@ pub fn run_generate_grid(config: GenerateGridConfig) -> Result<(), Box<dyn Error
     black_and_white_img
         .pixels()
         .for_each(|pixel: (u32, u32, Rgba<u8>)| {
-            let pixels_density =
-                (((255 - pixel.2[0]) as f32 / 255f32 * pixel.2[3] as f32 / 255f32) * 9f32) as u8;
+            let pixels_density = map_value_by_distribution(
+                (255 - pixel.2[0]) as usize * pixel.2[3] as usize,
+                |x| x.sqrt(),
+                255 * 255,
+                9,
+            );
 
             let mut rng = thread_rng();
 
@@ -77,6 +81,21 @@ pub fn run_generate_grid(config: GenerateGridConfig) -> Result<(), Box<dyn Error
     imgbuf.save(target_path).unwrap();
 
     Ok(())
+}
+
+fn map_value_by_distribution<F>(
+    value: usize,
+    distribution: F,
+    max_initial_value: usize,
+    max_final_value: usize,
+) -> usize
+where
+    F: Fn(f32) -> f32,
+{
+    let normalized_value = value as f32 / max_initial_value as f32;
+    let distributed = distribution(normalized_value);
+    let scaled_value = (distributed * max_final_value as f32).round() as usize;
+    scaled_value.min(max_final_value)
 }
 
 pub fn run_tutorial(config: TutorialConfig) -> Result<(), Box<dyn Error>> {
