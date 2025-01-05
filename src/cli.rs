@@ -13,7 +13,9 @@ pub struct Config {
 pub enum CommandType {
     ToBlackAndWhite(ToBlackAndWhiteConfig),
     GenerateGrid(GenerateGridConfig),
+    FindDistribution(FindDistributionConfig),
     ProcessText(ProcessTextConfig),
+    CreateCustomImage(CreateCustomImageConfig),
 }
 
 #[derive(FromArgs, PartialEq, Debug)]
@@ -38,6 +40,49 @@ pub struct GenerateGridConfig {
     #[argh(option)]
     /// the (optional) path for the new picture
     pub target_path: Option<String>,
+    #[argh(option, default = "3")]
+    /// the (optional) size of generated grid (default is 3)
+    pub grid_size: u32,
+    #[argh(option, default = "1.0")]
+    /// the (optional) gamma of generated grid (default is 1.0)
+    pub gamma: f32,
+}
+
+#[derive(FromArgs, PartialEq, Debug)]
+/// Returns a gamma value that used for grid generation uses the closest possible number of pixels tio the provided text,
+/// that still allows for fitting the whole text in the image.   
+#[argh(subcommand, name = "find-distribution")]
+pub struct FindDistributionConfig {
+    /// the path to the source picture
+    #[argh(positional)]
+    pub img_source_path: String,
+    /// the path to the source text
+    #[argh(positional)]
+    pub text_source_path: String,
+    #[argh(option, default = "3")]
+    /// the (optional) size of simulated grid (default is 3)
+    pub grid_size: u32,
+}
+
+#[derive(FromArgs, PartialEq, Debug)]
+/// Generate a picture made out of provided text.
+#[argh(subcommand, name = "create-custom-img")]
+pub struct CreateCustomImageConfig {
+    /// the path to the source picture
+    #[argh(positional)]
+    pub img_source_path: String,
+    /// the path to the source text
+    #[argh(positional)]
+    pub text_source_path: String,
+    #[argh(option)]
+    /// the (optional) path for the created picture
+    pub target_path: Option<String>,
+    #[argh(option)]
+    /// the size of generated grid
+    pub grid_size: u32,
+    #[argh(option)]
+    /// the gamma of generated grid
+    pub gamma: f32,
 }
 
 #[derive(FromArgs, PartialEq, Debug)]

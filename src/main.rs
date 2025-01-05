@@ -24,9 +24,21 @@ fn main() {
                 process::exit(1);
             }
         }
+        CommandType::FindDistribution(find_distribution_config) => {
+            if let Err(e) = book_pictures::run_find_distribution(find_distribution_config) {
+                eprintln!("Application error: {e}");
+                process::exit(1);
+            }
+        }
         CommandType::ProcessText(process_text_config) => {
             handle_process_text_subcommand(process_text_config)
-        } // _ => println!("unknown command")
+        }
+        CommandType::CreateCustomImage(create_custom_img_config) => {
+            if let Err(e) = book_pictures::run_create_custom_img(create_custom_img_config) {
+                eprintln!("Application error: {e}");
+                process::exit(1);
+            }
+        } // _ => println!("unknown command"),
     }
 }
 
