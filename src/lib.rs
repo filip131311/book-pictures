@@ -4,15 +4,14 @@ use cli::{
     CreateCustomImageConfig, FindDistributionConfig, GenerateGridConfig, RemoveMatchingLinesConfig,
     ReplaceEntersConfig, StripWhitespacesConfig, TextLengthConfig, ToBlackAndWhiteConfig,
 };
-use image::{GenericImageView, ImageBuffer, ImageReader, Rgb, Rgba};
+use image::{DynamicImage, GenericImageView, ImageBuffer, ImageReader, Rgb, Rgba};
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 use regex::Regex;
 use std::error::Error;
 use std::fs::File;
 use std::io::{BufRead, BufReader, BufWriter, Read, Write};
-use svg::node::element::path::Data;
-use svg::node::element::{Path, Style, Text};
+use svg::node::element::{Style, Text};
 use svg::Document;
 
 pub fn run_to_black_and_white(config: ToBlackAndWhiteConfig) -> Result<(), Box<dyn Error>> {
@@ -48,9 +47,10 @@ pub fn run_generate_grid(config: GenerateGridConfig) -> Result<(), Box<dyn Error
     let width = black_and_white_img.width();
 
     let grid_size = config.grid_size;
-    let grid_area = grid_size * grid_size;
 
     let gamma = config.gamma;
+
+    let grid = create_picture_grid(img, height, width, grid_size, gamma);
 
     let mut imgbuf: ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::from_pixel(
         width * grid_size as u32,
@@ -58,45 +58,17 @@ pub fn run_generate_grid(config: GenerateGridConfig) -> Result<(), Box<dyn Error
         Rgb([255, 255, 255]),
     );
 
-    let mut pixel_count = 0;
-
-    black_and_white_img
-        .pixels()
-        .for_each(|pixel: (u32, u32, Rgba<u8>)| {
-            let pixels_density = map_value_by_distribution(
-                (255 - pixel.2[0]) as u32 * pixel.2[3] as u32,
-                |x| x.powf(gamma),
-                255 * 255,
-                grid_area,
-            );
-
-            pixel_count += pixels_density;
-
-            let mut rng = thread_rng();
-
-            let mut array: Vec<bool> = (0..grid_area)
-                .map(|i| i < pixels_density)
-                .collect::<Vec<_>>();
-
-            array.shuffle(&mut rng);
-
-            array.iter().enumerate().for_each(|(index, &has_pixel)| {
-                if !has_pixel {
-                    return;
-                }
-                let p = Rgb([0u8, 0u8, 0u8]);
-                imgbuf.put_pixel(
-                    pixel.0 * grid_size + index as u32 / grid_size,
-                    pixel.1 * grid_size + index as u32 % grid_size,
-                    p,
-                );
-            });
-        });
+    for (y, line) in grid.iter().enumerate() {
+        for (x, is_filled) in line.iter().enumerate() {
+            if !*is_filled {
+                continue;
+            }
+            let p = Rgb([0u8, 0u8, 0u8]);
+            imgbuf.put_pixel(x as u32, y as u32, p);
+        }
+    }
 
     imgbuf.save(target_path).unwrap();
-
-    println!("The picture requires {} letters.", pixel_count);
-
     Ok(())
 }
 
@@ -301,37 +273,123 @@ pub fn run_remove_matching_lines(config: RemoveMatchingLinesConfig) -> Result<()
     Ok(())
 }
 
-pub fn run_create_custom_img(config: CreateCustomImageConfig) -> Result<(), Box<dyn Error>> {
-    let data = Data::new()
-        .move_to((10, 10))
-        .line_by((0, 50))
-        .line_by((50, 0))
-        .line_by((0, -50))
-        .close();
+fn create_picture_grid(
+    img: DynamicImage,
+    height: u32,
+    width: u32,
+    grid_size: u32,
+    gamma: f32,
+) -> Vec<Vec<bool>> {
+    let black_and_white_img = img.grayscale();
 
-    let path = Path::new()
-        .set("fill", "none")
-        .set("stroke", "black")
-        .set("stroke-width", 3)
-        .set("d", data);
+    let grid_area = grid_size * grid_size;
+
+    let mut grid = vec![vec![false; (width * grid_size) as usize]; (height * grid_size) as usize];
+
+    #[cfg(debug_assertions)]
+    let mut i = 0;
+
+    #[cfg(debug_assertions)]
+    let mut pixel_count = 0;
+
+    for pixel in black_and_white_img.pixels() {
+        let pixels_density = map_value_by_distribution(
+            (255 - pixel.2[0]) as u32 * pixel.2[3] as u32,
+            |x| x.powf(gamma),
+            255 * 255,
+            grid_area,
+        );
+
+        if cfg!(debug_assertions) {
+            pixel_count += pixels_density;
+            if i % 10_000 == 0 {
+                log::debug!("You are on {} pass", i);
+            }
+            i += 1;
+        }
+
+        let mut rng = thread_rng();
+
+        let mut array: Vec<bool> = (0..grid_area)
+            .map(|i| i < pixels_density)
+            .collect::<Vec<_>>();
+
+        array.shuffle(&mut rng);
+
+        for (index, &has_pixel) in array.iter().enumerate() {
+            if !has_pixel {
+                continue;
+            }
+            grid[(pixel.1 * grid_size + index as u32 % grid_size) as usize]
+                [(pixel.0 * grid_size + index as u32 / grid_size) as usize] = true;
+        }
+    }
+
+    if cfg!(debug_assertions) {
+        log::debug!("Generated image pixel count is {}", pixel_count);
+    }
+
+    grid
+}
+
+pub fn run_create_custom_img(config: CreateCustomImageConfig) -> Result<(), Box<dyn Error>> {
+    let img_source_path = config.img_source_path;
+    let target_path = &config
+        .target_path
+        .unwrap_or(String::from("custom-image.svg"));
+
+    let img = ImageReader::open(img_source_path)?.decode()?;
+
+    let height = img.height();
+    let width = img.width();
+
+    let grid_size = config.grid_size;
+    let gamma = config.gamma;
+
+    let grid = create_picture_grid(img, height, width, grid_size, gamma);
+
+    let text_source_path = config.text_source_path;
+
+    let file = File::open(text_source_path)?;
+    let mut reader = BufReader::new(file);
+
+    let mut text_buffer = String::new();
+
+    reader.read_to_string(&mut text_buffer)?;
+
+    let mut text_characters = text_buffer.chars();
 
     let style = Style::new(
-        "   .small {
-        font: italic 13px sans-serif;
+        "   .l {
+        font-family: 'Courier New', Courier, monospace;
+        font-size: 1px;
+        white-space: pre;
+        letter-spacing: 0.4px;
     }",
     );
 
-    let text = Text::new("hello world")
-        .set("x", 10)
-        .set("y", 10)
-        .set("class", "small");
+    let mut document = Document::new()
+        .set("viewBox", (0, 0, width * grid_size, height * grid_size))
+        .set("style", "background-color:white")
+        .add(style);
 
-    let document = Document::new()
-        .set("viewBox", (0, 0, 70, 70))
-        // .add(path)
-        .add(style)
-        .add(text);
+    for (index, line) in grid.iter().enumerate() {
+        let mut line_str = String::new();
+        for is_filled in line.iter() {
+            if *is_filled {
+                line_str.push(text_characters.next().unwrap_or(' '));
+            } else {
+                line_str.push(' ');
+            }
+        }
+        let text = Text::new(line_str)
+            .set("x", 0)
+            .set("y", index + 1)
+            .set("class", "l");
 
-    svg::save("image.svg", &document).unwrap();
+        document = document.add(text);
+    }
+
+    svg::save(target_path, &document).unwrap();
     Ok(())
 }
